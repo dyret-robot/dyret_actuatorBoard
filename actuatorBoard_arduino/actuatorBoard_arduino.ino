@@ -14,8 +14,11 @@ int zeroOffset[8]; // Contains the offset when zero
 
 ros::NodeHandle nh;
 
-dyret_common::Configuration config_msg;
-ros::Publisher p("actuatorStates", &config_msg);
+dyret_common::Configuration stateMessage;
+ros::Publisher statePub("actuatorStates", &stateMessage);
+
+dyret_common::Configuration debugMessage;
+ros::Publisher debugPub("dyret_actuator/actuatorDebug", &stateMessage);
 
 const int actuatorEnablePins[]    = {11, 10,  7,  6,  5,  4,  3,  2};
 const int actuatorDirectionPins[] = {34, 36, 42, 44, 46, 48, 50, 52};
@@ -102,16 +105,38 @@ void readPositions(){
     if ((measurements[i] > 768) && (lastMeasurement[i] < 256)){
       turnCounter[i]--;
     }
+
+    lastMeasurement[i] = readRawEncoder(i);
   }
 
   // Convert to mm
   for (int i = 0; i < 8; i++){
-    currentPos[i] = -((measurements[i] + (turnCounter[i] * 1024.0))-zeroOffset[i]) * (2.5 / 1024.0);
+    currentPos[i] = -((measurements[i] + (turnCounter[i] * 1024.0))-zeroOffset[i]) * ((16.0/7.0) / 1024.0);
   }
 }
 
 // Setup message to send out
-void setupMessage(dyret_common::Configuration& msg){
+void setupStateMessage(dyret_common::Configuration& msg){
+  static int32_t actuatorId[8];
+  static float distances[8];
+
+  for (int32_t i = 0; i < 8; i++){
+      actuatorId[i] = i;
+      distances[i] = (float) lastMeasurement[i];
+  }
+
+  actuatorGoal[2] = 15.0;
+  
+  debugMessage.id = actuatorId;
+  
+  debugMessage.distance = distances;
+  
+  debugMessage.id_length = 8;
+  debugMessage.distance_length = 8;
+
+}
+
+void setupDebugMessage(dyret_common::Configuration& msg){
   static int32_t actuatorId[8];
   static float distances[8];
 
@@ -119,19 +144,14 @@ void setupMessage(dyret_common::Configuration& msg){
       actuatorId[i] = i;
   }
 
-  static float tmp[8];
-  for (int i = 0; i < 8; i++) tmp[i] = float(lastMeasurement[i]);
-
   actuatorGoal[2] = 15.0;
   
-  config_msg.id = actuatorId;
+  stateMessage.id = actuatorId;
   
-  config_msg.distance = currentPos;
-  //config_msg.distance = tmp;
-  //config_msg.distance = actuatorGoal;
+  stateMessage.distance = currentPos;
   
-  config_msg.id_length = 8;
-  config_msg.distance_length = 8;
+  stateMessage.id_length = 8;
+  stateMessage.distance_length = 8;
 
 }
 
@@ -168,7 +188,8 @@ void setup() {
   }
   
   nh.subscribe(s);
-  nh.advertise(p);
+  nh.advertise(statePub);
+  nh.advertise(debugPub);
 
 }
 
@@ -178,9 +199,11 @@ void loop() {
   // Read positions:
   readPositions();
   
-  setupMessage(config_msg);
+  setupStateMessage(stateMessage);
+  setupDebugMessage(debugMessage);
   
-  p.publish(&config_msg);
+  statePub.publish(&stateMessage);
+  debugPub.publish(&debugMessage);
   nh.spinOnce();
 
   for (int i = 0; i < 8; i++){
@@ -209,11 +232,6 @@ void loop() {
     } else {
       disableMotor(i);
     }
-  }
-
-
-  for (int i = 0; i < 8; i++){
-    lastMeasurement[i] = readRawEncoder(i);
   }
 
   delay(100);
