@@ -50,7 +50,7 @@ int readRawEncoder(int givenActuatorNumber){ // Returns int 0-1023
 }
 
 void setMotorZeroPoint(int givenActuatorNumber){
-  commandReceived[givenActuatorNumber] = false;
+  actuatorGoal[givenActuatorNumber] = 0.0;
   zeroOffset[givenActuatorNumber] = readRawEncoder(givenActuatorNumber);
   turnCounter[givenActuatorNumber] = 0;
 }
@@ -211,9 +211,8 @@ void loop() {
     if (commandReceived[i] == true){
   
       int motorSpeed = min(abs(actuatorGoal[i] - currentPos[i]) * pValue, 255);
-      bool motorDirectionRetract = false;
 
-      if (abs(actuatorGoal[i] - currentPos[i]) < 0.05){
+      if (abs(actuatorGoal[i] - currentPos[i]) < 0.1){
         disableMotor(i);
       } else {
         if (currentPos[i] > actuatorGoal[i]){ // Retract
