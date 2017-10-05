@@ -46,6 +46,12 @@ int readRawEncoder(int givenActuatorNumber){ // Returns int 0-1023
   return analogRead(encoderInputPins[givenActuatorNumber]);
 }
 
+void setMotorZeroPoint(int givenActuatorNumber){
+  commandReceived[givenActuatorNumber] = false;
+  zeroOffset[givenActuatorNumber] = readRawEncoder(givenActuatorNumber);
+  turnCounter[givenActuatorNumber] = 0;
+}
+
 void zeroLegs(){
   for (int i = 0; i < 8; i++){
     Serial.print("Zeroing actuator ");
@@ -53,7 +59,8 @@ void zeroLegs(){
     if (limitSwitchActive(i) == false){ retractActuator(i); }
     while (limitSwitchActive(i) == false){ ; } // Wait until retracted fully
     disableMotor(i);
-    zeroOffset[i] = readRawEncoder(i);
+    delay(1000); // wait for complete stop
+    setMotorZeroPoint(i);
     Serial.print(i);
     Serial.print(": ");
     Serial.println(zeroOffset[i]);
@@ -129,14 +136,10 @@ void setupMessage(dyret_common::Configuration& msg){
 }
 
 void messageCb(const dyret_common::Configuration& msg){
-   for (int i = 0; i < msg.id_length; i++){
-     if (msg.distance[i] < 0){
-      commandReceived[msg.id[i]] = false; // Disable regulation
-    } else {
-      if (msg.id[i] >= 0 && msg.id[i] < 8){
-        actuatorGoal[msg.id[i]] = msg.distance[i];
-        commandReceived[msg.id[i]] = true;
-      }
+  for (int i = 0; i < msg.id_length; i++){
+    if (msg.id[i] >= 0 && msg.id[i] < 8){
+      actuatorGoal[msg.id[i]] = msg.distance[i];
+      commandReceived[msg.id[i]] = true;
     }
   }  
 }
@@ -156,14 +159,14 @@ void setup() {
   for (int i = 0; i < sizeof(limitSwitchOutputPins)/sizeof(int); i++){ pinMode(limitSwitchOutputPins[i], OUTPUT); digitalWrite(limitSwitchOutputPins[i], LOW); } // Set pinmode and output ground to limit switch outputs
   for (int i = 0; i < sizeof(limitSwitchInputPins)/sizeof(int); i++){ pinMode(limitSwitchInputPins[i], INPUT); digitalWrite(limitSwitchInputPins[i], HIGH); }    // Set pinmode and connect pullup to limit switch inputs
 
+  nh.initNode(); 
+  
   zeroLegs();
 
   for (int i = 0; i < 8; i++){
     lastMeasurement[i] = readRawEncoder(i);
   }
   
-  nh.initNode(); 
-
   nh.subscribe(s);
   nh.advertise(p);
 
@@ -190,8 +193,17 @@ void loop() {
       if (abs(actuatorGoal[i] - currentPos[i]) < 0.05){
         disableMotor(i);
       } else {
-        enableMotor(i, motorSpeed, (currentPos[i] > actuatorGoal[i]));
-      
+        if (currentPos[i] > actuatorGoal[i]){ // Retract
+          if (limitSwitchActive(i) == false){ 
+            enableMotor(i, motorSpeed, true);
+          } else {
+            setMotorZeroPoint(i);
+          }
+          
+        } else {
+          enableMotor(i, motorSpeed, false);  
+        }
+        
       }
     
     } else {
