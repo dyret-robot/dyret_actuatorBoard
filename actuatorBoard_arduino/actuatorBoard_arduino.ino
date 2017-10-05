@@ -17,9 +17,47 @@ ros::NodeHandle nh;
 dyret_common::Configuration config_msg;
 ros::Publisher p("actuatorStates", &config_msg);
 
+const int actuatorEnablePins[]    = {11, 10,  7,  6,  5,  4,  3,  2};
+const int actuatorDirectionPins[] = {34, 36, 42, 44, 46, 48, 50, 52};
+const int limitSwitchInputPins[]  = {25, 29, 33, 37, 41, 45, 49, 53}; 
+const int limitSwitchOutputPins[] = {23, 27, 31, 35, 39, 43, 47, 51};
+const int encoderInputPins[]      = { 2,  3,  6,  7,  8,  9, 10, 11};
+
 bool limitSwitchActive(int givenActuatorNumber){
-  if (digitalRead(25+(givenActuatorNumber*4)) == LOW) return false;
+  if (digitalRead(limitSwitchInputPins[givenActuatorNumber]) == LOW) return false;
   return true;
+}
+
+void expandActuator(int givenActuatorNumber){
+  digitalWrite(actuatorDirectionPins[givenActuatorNumber], LOW); // Set direction
+  digitalWrite(actuatorEnablePins[givenActuatorNumber], HIGH); // Set enable bit
+}
+
+void retractActuator(int givenActuatorNumber){
+  digitalWrite(actuatorDirectionPins[givenActuatorNumber], HIGH); // Set direction
+  digitalWrite(actuatorEnablePins[givenActuatorNumber], HIGH); // Set enable bit
+}
+
+void disableMotor(int givenActuatorNumber){
+  digitalWrite(actuatorEnablePins[givenActuatorNumber], LOW); // Set enable bit
+}
+
+int readRawEncoder(int givenActuatorNumber){ // Returns int 0-1023
+  return analogRead(encoderInputPins[givenActuatorNumber]);
+}
+
+void zeroLegs(){
+  for (int i = 0; i < 8; i++){
+    Serial.print("Zeroing actuator ");
+    Serial.println(i);
+    if (limitSwitchActive(i) == false){ retractActuator(i); }
+    while (limitSwitchActive(i) == false){ ; } // Wait until retracted fully
+    disableMotor(i);
+    zeroOffset[i] = readRawEncoder(i);
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.println(zeroOffset[i]);
+  }
 }
 
 void enableMotor(int givenActuatorNumber, int givenMotorSpeed, bool motorDirectionRetract){ // Speed 0-255, direction inward
@@ -27,41 +65,14 @@ void enableMotor(int givenActuatorNumber, int givenMotorSpeed, bool motorDirecti
 
   // Set direction
   if (motorDirectionRetract){
-    digitalWrite(38 + (2 * givenActuatorNumber), HIGH);
+    digitalWrite(actuatorDirectionPins[givenActuatorNumber], HIGH); // Set direction
   } else {
-    digitalWrite(38 + (2 * givenActuatorNumber), LOW);
+    digitalWrite(actuatorDirectionPins[givenActuatorNumber], LOW); // Set direction
   }
 
   // Set speed (motor enable)
-  analogWrite(9 - givenActuatorNumber, motorSpeed);
+  analogWrite(actuatorEnablePins[givenActuatorNumber], motorSpeed);
   
-}
-
-void expandActuator(int givenActuatorNumber){
-  digitalWrite(38 + (2 * givenActuatorNumber), LOW); // Set direction
-  digitalWrite(9 - givenActuatorNumber, HIGH); // Set enable bit
-}
-
-void retractActuator(int givenActuatorNumber){
-  digitalWrite(38 + (2 * givenActuatorNumber), HIGH); // Set direction
-  digitalWrite(9 - givenActuatorNumber, HIGH); // Set enable bit
-}
-
-void disableMotor(int givenActuatorNumber){
-  digitalWrite(9 - givenActuatorNumber, LOW); // Set enable bit
-}
-
-int readRawEncoder(int givenActuatorNumber){ // Returns int 0-1023
-  return analogRead(givenActuatorNumber+4);
-}
-
-void zeroLegs(){
-  for (int i = 0; i < 8; i++){
-    if (limitSwitchActive(i) == false){ retractActuator(i); }
-    while (limitSwitchActive(i) == false){ ; } // Wait until retracted fully
-    disableMotor(i);
-    zeroOffset[i] = readRawEncoder(i);
-  }
 }
 
 void readPositions(){
@@ -140,25 +151,16 @@ void setup() {
     commandReceived[i] = false;
   }
 
-  // Enable pins
-  for(int i = 2; i <= 13; i++){ pinMode(i, OUTPUT); digitalWrite(i, LOW); }
-
-  // Direction pins
-  for(int i = 30; i <= 52; i = i+2){ pinMode(i, OUTPUT);}
-
-  // Set pinmode and output ground to limit switch outputs
-  for (int i = 23; i <= 53; i = i+4){
-    pinMode(i, OUTPUT);
-    digitalWrite(i, LOW);
-  }
-
-  // Set pinmode and connect pullup to limit switch inputs
-  for (int i = 25; i <= 53; i = i+4){
-    pinMode(i, INPUT);
-    digitalWrite(i, HIGH);
-  }
+  for (int i = 0; i < sizeof(actuatorEnablePins)/sizeof(int); i++){ pinMode(actuatorEnablePins[i], OUTPUT); digitalWrite(actuatorEnablePins[i], LOW); }          // Enable pins
+  for (int i = 0; i < sizeof(actuatorDirectionPins)/sizeof(int); i++){ pinMode(actuatorDirectionPins[i], OUTPUT); }                                              // Direction pins
+  for (int i = 0; i < sizeof(limitSwitchOutputPins)/sizeof(int); i++){ pinMode(limitSwitchOutputPins[i], OUTPUT); digitalWrite(limitSwitchOutputPins[i], LOW); } // Set pinmode and output ground to limit switch outputs
+  for (int i = 0; i < sizeof(limitSwitchInputPins)/sizeof(int); i++){ pinMode(limitSwitchInputPins[i], INPUT); digitalWrite(limitSwitchInputPins[i], HIGH); }    // Set pinmode and connect pullup to limit switch inputs
 
   zeroLegs();
+
+  for (int i = 0; i < 8; i++){
+    lastMeasurement[i] = readRawEncoder(i);
+  }
   
   nh.initNode(); 
 
