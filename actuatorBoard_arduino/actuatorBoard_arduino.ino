@@ -122,11 +122,9 @@ void setupStateMessage(dyret_common::Configuration& msg){
 
   for (int32_t i = 0; i < 8; i++){
       actuatorId[i] = i;
-      distances[i] = (float) lastMeasurement[i];
+      distances[i] = (float) actuatorGoal[i];
   }
 
-  actuatorGoal[2] = 15.0;
-  
   debugMessage.id = actuatorId;
   
   debugMessage.distance = distances;
@@ -144,8 +142,6 @@ void setupDebugMessage(dyret_common::Configuration& msg){
       actuatorId[i] = i;
   }
 
-  actuatorGoal[2] = 15.0;
-  
   stateMessage.id = actuatorId;
   
   stateMessage.distance = currentPos;
@@ -162,6 +158,10 @@ void messageCb(const dyret_common::Configuration& msg){
       commandReceived[msg.id[i]] = true;
     }
   }  
+
+  actuatorGoal[6] = actuatorGoal[6] + 1;
+
+  actuatorGoal[7] = msg.id_length;
 }
 
 ros::Subscriber<dyret_common::Configuration> s("actuatorCommands",messageCb);
