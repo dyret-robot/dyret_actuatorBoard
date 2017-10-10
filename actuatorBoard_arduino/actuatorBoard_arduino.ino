@@ -2,6 +2,8 @@
 #include <dyret_common/Configuration.h>
 #include <std_msgs/String.h>
 
+// TODO: Make sure no command is received before legs are zeroed
+
 const int actuatorEnablePins[]    = {11, 10,  7,  6,  5,  4,  3,  2};
 const int actuatorDirectionPins[] = {34, 36, 42, 44, 46, 48, 50, 52};
 const int limitSwitchInputPins[]  = {25, 29, 33, 37, 41, 45, 49, 53}; 
@@ -60,24 +62,10 @@ int readRawEncoder(int givenActuatorNumber){ // Returns int 0-1023
 }
 
 void setMotorZeroPoint(int givenActuatorNumber){
+  commandReceived[givenActuatorNumber] = false;  
   actuatorGoal[givenActuatorNumber] = 0.0;
   zeroOffset[givenActuatorNumber] = readRawEncoder(givenActuatorNumber);
   turnCounter[givenActuatorNumber] = 0;
-}
-
-void zeroLegs(){
-  for (int i = 0; i < 8; i++){
-    Serial.print("Zeroing actuator ");
-    Serial.println(i);
-    if (limitSwitchActive(i) == false){ retractActuator(i); }
-    while (limitSwitchActive(i) == false){ ; } // Wait until retracted fully
-    disableMotor(i);
-    delay(1000); // wait for complete stop
-    setMotorZeroPoint(i);
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.println(zeroOffset[i]);
-  }
 }
 
 void enableMotor(int givenActuatorNumber, int givenMotorSpeed, bool motorDirectionRetract){ // Speed 0-255, direction inward
@@ -187,7 +175,10 @@ void setup() {
 
   nh.initNode(); 
   
-  zeroLegs();
+  for (int i = 0; i < 8; i++){
+    commandReceived[i] = true;
+    actuatorGoal[i] = -100;
+  }
 
   for (int i = 0; i < 8; i++){
     lastMeasurement[i] = readRawEncoder(i);
