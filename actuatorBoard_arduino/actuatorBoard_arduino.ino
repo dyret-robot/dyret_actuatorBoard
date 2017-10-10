@@ -106,7 +106,7 @@ void readPositions(){
       turnCounter[i]--;
     }
 
-    lastMeasurement[i] = readRawEncoder(i);
+    lastMeasurement[i] = measurements[i];
   }
 
   // Convert to mm
@@ -121,7 +121,7 @@ void setupStateMessage(dyret_common::Configuration& msg){
   static float distances[8];
 
   for (int32_t i = 0; i < 8; i++){
-      actuatorId[i] = i;
+      if (commandReceived[i] == true) actuatorId[i] = 1; else actuatorId[i] = 0;
       distances[i] = (float) actuatorGoal[i];
   }
 
@@ -159,9 +159,8 @@ void messageCb(const dyret_common::Configuration& msg){
     }
   }  
 
-  actuatorGoal[6] = actuatorGoal[6] + 1;
-
-  actuatorGoal[7] = msg.id_length;
+/*  debugMessage = msg; 
+  debugPub.publish(&debugMessage); */
 }
 
 ros::Subscriber<dyret_common::Configuration> s("actuatorCommands",messageCb);
@@ -193,46 +192,64 @@ void setup() {
 
 }
 
+int sendMessageCounter = 0;
+int motorControlCounter = 0;
+
 void loop() {
-  int pValue = 500;
+  const int pValue = 500;
+  const int sendMessageInterval = 50; // ~10hz
+  const int motorControlInterval = 50; // ~10hz
 
   // Read positions:
   readPositions();
-  
-  setupStateMessage(stateMessage);
-  setupDebugMessage(debugMessage);
-  
-  statePub.publish(&stateMessage);
-  debugPub.publish(&debugMessage);
-  nh.spinOnce();
 
-  for (int i = 0; i < 8; i++){
-
-    if (commandReceived[i] == true){
+  // Send messages:
+  sendMessageCounter += 1;
+  if (sendMessageCounter == sendMessageInterval+1){
+    setupStateMessage(stateMessage);
+    setupDebugMessage(debugMessage);
   
-      int motorSpeed = min(abs(actuatorGoal[i] - currentPos[i]) * pValue, 255);
+    statePub.publish(&stateMessage);
+    debugPub.publish(&debugMessage);
+    
+    sendMessageCounter = 0;
+  }
+  
+  // Do motor loop:
+  motorControlCounter += 1;
 
-      if (abs(actuatorGoal[i] - currentPos[i]) < 0.1){
-        disableMotor(i);
-      } else {
-        if (currentPos[i] > actuatorGoal[i]){ // Retract
-          if (limitSwitchActive(i) == false){ 
-            enableMotor(i, motorSpeed, true);
+  if (motorControlCounter == motorControlInterval+1){
+    for (int i = 0; i < 8; i++){
+  
+      if (commandReceived[i] == true){
+    
+        int motorSpeed = min(abs(actuatorGoal[i] - currentPos[i]) * pValue, 255);
+  
+        if (abs(actuatorGoal[i] - currentPos[i]) < 0.1){
+          disableMotor(i);
+        } else {
+          if (currentPos[i] > actuatorGoal[i]){ // Retract
+            if (limitSwitchActive(i) == false){ 
+              enableMotor(i, motorSpeed, true);
+            } else {
+              setMotorZeroPoint(i);
+            }
+            
           } else {
-            setMotorZeroPoint(i);
+            enableMotor(i, motorSpeed, false);  
           }
           
-        } else {
-          enableMotor(i, motorSpeed, false);  
         }
-        
+      
+      } else {
+        disableMotor(i);
       }
-    
-    } else {
-      disableMotor(i);
     }
+
+    motorControlCounter = 0;
   }
 
-  delay(100);
+  // Spin ROS:
+  nh.spinOnce();
 
 }
