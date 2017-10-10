@@ -2,7 +2,20 @@
 #include <dyret_common/Configuration.h>
 #include <std_msgs/String.h>
 
+const int actuatorEnablePins[]    = {11, 10,  7,  6,  5,  4,  3,  2};
+const int actuatorDirectionPins[] = {34, 36, 42, 44, 46, 48, 50, 52};
+const int limitSwitchInputPins[]  = {25, 29, 33, 37, 41, 45, 49, 53}; 
+const int limitSwitchOutputPins[] = {23, 27, 31, 35, 39, 43, 47, 51};
+const int encoderInputPins[]      = { 2,  3,  6,  7,  8,  9, 10, 11};
+
+const int pValue = 500;
+const int sendMessageInterval = 50; // ~10hz
+const int motorControlInterval = 50; // ~10hz
+
 bool commandReceived[8];
+
+int sendMessageCounter = 0;
+int motorControlCounter = 0;
 
 float actuatorGoal[8];
 float currentPos[8]; // Current position in MM
@@ -20,11 +33,8 @@ ros::Publisher statePub("actuatorStates", &stateMessage);
 dyret_common::Configuration debugMessage;
 ros::Publisher debugPub("dyret_actuator/actuatorDebug", &stateMessage);
 
-const int actuatorEnablePins[]    = {11, 10,  7,  6,  5,  4,  3,  2};
-const int actuatorDirectionPins[] = {34, 36, 42, 44, 46, 48, 50, 52};
-const int limitSwitchInputPins[]  = {25, 29, 33, 37, 41, 45, 49, 53}; 
-const int limitSwitchOutputPins[] = {23, 27, 31, 35, 39, 43, 47, 51};
-const int encoderInputPins[]      = { 2,  3,  6,  7,  8,  9, 10, 11};
+void messageCb(const dyret_common::Configuration& msg);
+ros::Subscriber<dyret_common::Configuration> s("actuatorCommands",messageCb);
 
 bool limitSwitchActive(int givenActuatorNumber){
   if (digitalRead(limitSwitchInputPins[givenActuatorNumber]) == LOW) return false;
@@ -115,8 +125,7 @@ void readPositions(){
   }
 }
 
-// Setup message to send out
-void setupStateMessage(dyret_common::Configuration& msg){
+void setupDebugMessage(){
   static int32_t actuatorId[8];
   static float distances[8];
 
@@ -134,9 +143,9 @@ void setupStateMessage(dyret_common::Configuration& msg){
 
 }
 
-void setupDebugMessage(dyret_common::Configuration& msg){
+void setupStateMessage(){
   static int32_t actuatorId[8];
-  static float distances[8];
+  //static float distances[8];
 
   for (int32_t i = 0; i < 8; i++){
       actuatorId[i] = i;
@@ -159,11 +168,9 @@ void messageCb(const dyret_common::Configuration& msg){
     }
   }  
 
-/*  debugMessage = msg; 
-  debugPub.publish(&debugMessage); */
+//  debugMessage = msg;
+//  debugPub.publish(&debugMessage);
 }
-
-ros::Subscriber<dyret_common::Configuration> s("actuatorCommands",messageCb);
 
 void setup() {
   for (int i = 0; i < 8; i++){
@@ -192,13 +199,7 @@ void setup() {
 
 }
 
-int sendMessageCounter = 0;
-int motorControlCounter = 0;
-
 void loop() {
-  const int pValue = 500;
-  const int sendMessageInterval = 50; // ~10hz
-  const int motorControlInterval = 50; // ~10hz
 
   // Read positions:
   readPositions();
@@ -206,8 +207,8 @@ void loop() {
   // Send messages:
   sendMessageCounter += 1;
   if (sendMessageCounter == sendMessageInterval+1){
-    setupStateMessage(stateMessage);
-    setupDebugMessage(debugMessage);
+    setupStateMessage();
+    setupDebugMessage();
   
     statePub.publish(&stateMessage);
     debugPub.publish(&debugMessage);
