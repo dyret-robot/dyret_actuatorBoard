@@ -149,10 +149,34 @@ void setupStateMessage(){
 }
 
 void messageCb(const dyret_common::Configuration& msg){
-  for (int i = 0; i < msg.id_length; i++){
-    if (msg.id[i] >= 0 && msg.id[i] < 8){
-      actuatorGoal[msg.id[i]] = msg.distance[i];
-      commandReceived[msg.id[i]] = true;
+
+  // Special case for just one distance without ids
+  if (msg.id_length == 0 && msg.distance_length == 1){
+    for (int i = 0; i < 8; i++){
+      actuatorGoal[i] = msg.distance[0];
+      commandReceived[i] = true;
+    }
+  }
+
+  // Special case for just two distances without ids
+  if (msg.id_length == 0 && msg.distance_length == 2){
+    for (int i = 0; i < 8; i = i+2){
+      actuatorGoal[i] = msg.distance[0];
+      commandReceived[i] = true;
+    }
+    
+    for (int i = 1; i < 8; i = i+2){
+      actuatorGoal[i] = msg.distance[1];
+      commandReceived[i] = true;
+    }
+
+  } else {
+  
+    for (int i = 0; i < msg.id_length; i++){
+      if (msg.id[i] >= 0 && msg.id[i] < 8){
+        actuatorGoal[msg.id[i]] = msg.distance[i];
+        commandReceived[msg.id[i]] = true;
+      }
     }
   }  
 
