@@ -69,7 +69,7 @@ void setMotorZeroPoint(int givenActuatorNumber){
 }
 
 void enableMotor(int givenActuatorNumber, int givenMotorSpeed, bool motorDirectionRetract){ // Speed 0-255, direction inward
-  int motorSpeed = min(givenMotorSpeed, 255);
+  int motorSpeed = min(givenMotorSpeed, 180); // 255 = 14.8V, 180 ~= 12V
 
   // Set direction
   if (motorDirectionRetract){
@@ -152,8 +152,13 @@ void messageCb(const dyret_common::Configuration& msg){
 
   // Special case for just one distance without ids
   if (msg.id_length == 0 && msg.distance_length == 1){
-    for (int i = 0; i < 8; i++){
-      actuatorGoal[i] = msg.distance[0];
+    for (int i = 0; i < 8; i = i+2){
+      actuatorGoal[i] = min(msg.distance[0], 28);
+      commandReceived[i] = true;
+    }
+    
+    for (int i = 1; i < 8; i = i+2){
+      actuatorGoal[i] = min(msg.distance[0], 95);
       commandReceived[i] = true;
     }
   }
