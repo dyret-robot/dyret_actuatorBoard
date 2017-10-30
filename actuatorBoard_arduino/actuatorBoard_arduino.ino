@@ -166,12 +166,12 @@ void messageCb(const dyret_common::Configuration& msg){
   // Special case for just two distances without ids
   if (msg.id_length == 0 && msg.distance_length == 2){
     for (int i = 0; i < 8; i = i+2){
-      actuatorGoal[i] = msg.distance[0];
+      actuatorGoal[i] = min(msg.distance[0], 28);
       commandReceived[i] = true;
     }
     
     for (int i = 1; i < 8; i = i+2){
-      actuatorGoal[i] = msg.distance[1];
+      actuatorGoal[i] = min(msg.distance[1], 95);
       commandReceived[i] = true;
     }
 
