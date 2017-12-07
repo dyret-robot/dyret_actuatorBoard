@@ -2,8 +2,6 @@
 #include <dyret_common/Configuration.h>
 #include <std_msgs/String.h>
 
-// TODO: Make sure no command is received before legs are zeroed
-
 const int actuatorEnablePins[]    = {11, 10,  7,  6,  5,  4,  3,  2};
 const int actuatorDirectionPins[] = {34, 36, 42, 44, 46, 48, 50, 52};
 const int limitSwitchInputPins[]  = {25, 29, 33, 37, 41, 45, 49, 53}; 
@@ -13,6 +11,8 @@ const int encoderInputPins[]      = { 2,  3,  6,  7,  8,  9, 10, 11};
 const int pValue = 500;
 const int sendMessageInterval = 50; // ~10hz
 const int motorControlInterval = 50; // ~10hz
+
+bool initiated[8];
 
 bool commandReceived[8];
 
@@ -62,6 +62,7 @@ int readRawEncoder(int givenActuatorNumber){ // Returns int 0-1023
 }
 
 void setMotorZeroPoint(int givenActuatorNumber){
+  initiated[givenActuatorNumber] = true;
   commandReceived[givenActuatorNumber] = false;  
   actuatorGoal[givenActuatorNumber] = 0.0;
   zeroOffset[givenActuatorNumber] = readRawEncoder(givenActuatorNumber);
@@ -150,40 +151,19 @@ void setupStateMessage(){
 
 void messageCb(const dyret_common::Configuration& msg){
 
-  // Special case for just one distance without ids
-  if (msg.id_length == 0 && msg.distance_length == 1){
-    for (int i = 0; i < 8; i = i+2){
-      actuatorGoal[i] = min(msg.distance[0], 28);
-      commandReceived[i] = true;
-    }
-    
-    for (int i = 1; i < 8; i = i+2){
-      actuatorGoal[i] = min(msg.distance[0], 95);
-      commandReceived[i] = true;
-    }
-  }
-
   // Special case for just two distances without ids
   if (msg.id_length == 0 && msg.distance_length == 2){
     for (int i = 0; i < 8; i = i+2){
-      actuatorGoal[i] = min(msg.distance[0], 28);
+      if (initiated[i] == true) actuatorGoal[i] = min(msg.distance[0], 28);
       commandReceived[i] = true;
     }
     
     for (int i = 1; i < 8; i = i+2){
-      actuatorGoal[i] = min(msg.distance[1], 95);
+      if (initiated[i] == true) actuatorGoal[i] = min(msg.distance[1], 95);
       commandReceived[i] = true;
     }
 
-  } else {
-  
-    for (int i = 0; i < msg.id_length; i++){
-      if (msg.id[i] >= 0 && msg.id[i] < 8){
-        actuatorGoal[msg.id[i]] = msg.distance[i];
-        commandReceived[msg.id[i]] = true;
-      }
-    }
-  }  
+  }
 
 //  debugMessage = msg;
 //  debugPub.publish(&debugMessage);
@@ -195,6 +175,7 @@ void setup() {
     zeroOffset[i] = 0;
     turnCounter[i] = 0;
     commandReceived[i] = false;
+    initiated[i] = false;
   }
 
   for (int i = 0; i < sizeof(actuatorEnablePins)/sizeof(int); i++){ pinMode(actuatorEnablePins[i], OUTPUT); digitalWrite(actuatorEnablePins[i], LOW); }          // Enable pins
