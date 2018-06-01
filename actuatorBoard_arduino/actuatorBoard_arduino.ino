@@ -1,5 +1,6 @@
 #include <ros.h>
-#include <dyret_common/Configuration.h>
+#include <dyret_hardware/ActuatorBoardCommand.h>
+#include <dyret_hardware/ActuatorBoardState.h>
 #include <std_msgs/String.h>
 
 const int actuatorEnablePins[]    = {11, 10,  7,  6,  5,  4,  3,  2};
@@ -29,14 +30,11 @@ int zeroOffset[8]; // Contains the offset when zero
 
 ros::NodeHandle nh;
 
-dyret_common::Configuration stateMessage;
-ros::Publisher statePub("actuatorStates", &stateMessage);
+dyret_hardware::ActuatorBoardState stateMessage;
+ros::Publisher statePub("dyret/actuator_board/state", &stateMessage);
 
-dyret_common::Configuration debugMessage;
-ros::Publisher debugPub("dyret_actuator/actuatorDebug", &stateMessage);
-
-void messageCb(const dyret_common::Configuration& msg);
-ros::Subscriber<dyret_common::Configuration> s("actuatorCommands",messageCb);
+void messageCb(const dyret_hardware::ActuatorBoardCommand& msg);
+ros::Subscriber<dyret_hardware::ActuatorBoardCommand> s("dyret/actuator_board/command",messageCb);
 
 bool limitSwitchActive(int givenActuatorNumber){
   if (digitalRead(limitSwitchInputPins[givenActuatorNumber]) == LOW) return false;
@@ -114,52 +112,25 @@ void readPositions(){
   }
 }
 
-void setupDebugMessage(){
-  static int32_t actuatorId[8];
-  static float distances[8];
-
-  for (int32_t i = 0; i < 8; i++){
-      if (commandReceived[i] == true) actuatorId[i] = 1; else actuatorId[i] = 0;
-      distances[i] = (float) actuatorGoal[i];
-  }
-
-  debugMessage.id = actuatorId;
-  
-  debugMessage.distance = distances;
-  
-  debugMessage.id_length = 8;
-  debugMessage.distance_length = 8;
-
-}
-
 void setupStateMessage(){
-  static int32_t actuatorId[8];
-  //static float distances[8];
 
-  for (int32_t i = 0; i < 8; i++){
-      actuatorId[i] = i;
+  for (int i = 0; i < 8; i++){
+    stateMessage.position[i] = currentPos[i];
   }
-
-  stateMessage.id = actuatorId;
-  
-  stateMessage.distance = currentPos;
-  
-  stateMessage.id_length = 8;
-  stateMessage.distance_length = 8;
 
 }
 
-void messageCb(const dyret_common::Configuration& msg){
+void messageCb(const dyret_hardware::ActuatorBoardCommand& msg){
 
   // Special case for just two distances without ids
-  if (msg.id_length == 0 && msg.distance_length == 2){
+  if (msg.length_length == 2){
     for (int i = 0; i < 8; i = i+2){
-      if (initiated[i] == true) actuatorGoal[i] = min(msg.distance[0], 28);
+      if (initiated[i] == true) actuatorGoal[i] = min(msg.length[0], 28);
       commandReceived[i] = true;
     }
     
     for (int i = 1; i < 8; i = i+2){
-      if (initiated[i] == true) actuatorGoal[i] = min(msg.distance[1], 95);
+      if (initiated[i] == true) actuatorGoal[i] = min(msg.length[1], 95);
       commandReceived[i] = true;
     }
 
@@ -196,7 +167,6 @@ void setup() {
   
   nh.subscribe(s);
   nh.advertise(statePub);
-  nh.advertise(debugPub);
 
 }
 
@@ -209,10 +179,8 @@ void loop() {
   sendMessageCounter += 1;
   if (sendMessageCounter == sendMessageInterval+1){
     setupStateMessage();
-    setupDebugMessage();
   
     statePub.publish(&stateMessage);
-    debugPub.publish(&debugMessage);
     
     sendMessageCounter = 0;
   }
