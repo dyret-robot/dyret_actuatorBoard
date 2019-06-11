@@ -197,6 +197,11 @@ void messageCb(const dyret_hardware::ActuatorBoardCommand& msg) {
     }
   }
 
+  // Reset all motor errors on new command
+  for (int i = 0; i < 8; i++){
+    motorError[i] = false;
+  }
+
 }
 
 void setup() {
